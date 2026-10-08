@@ -10,21 +10,30 @@ import { ComponentsScreen } from './components/screens/ComponentsScreen';
 import { SbomQualityScreen } from './components/screens/SbomQualityScreen';
 import { ReportsScreen } from './components/screens/ReportsScreen';
 import { SettingsScreen } from './components/screens/SettingsScreen';
+import { AuthScreen } from './components/auth/AuthScreen';
 
-import { 
-  INITIAL_SCAN_METRICS, 
-  DEMO_VULNERABILITIES, 
-  DEMO_COMPONENTS 
-} from './data/demoData';
-import { checkBackendHealth } from './services/api';
+import { checkBackendHealth, getCurrentUser, getScans, getScan, logout } from './services/api';
+import { normalizeScanData } from './services/normalizeScan';
 
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
   const [currentTab, setCurrentTab] = useState('overview');
   const [selectedVulnerability, setSelectedVulnerability] = useState(null);
-  const [scanData, setScanData] = useState(INITIAL_SCAN_METRICS);
-  const [vulnerabilities] = useState(DEMO_VULNERABILITIES);
-  const [components] = useState(DEMO_COMPONENTS);
-  const [backendStatus, setBackendStatus] = useState({ isOnline: false, message: 'Connecting...' });
+
+  // Real backend data only
+  const [scanData, setScanData] = useState(null);
+  const [vulnerabilities, setVulnerabilities] = useState([]);
+  const [components, setComponents] = useState([]);
+  const [scanHistory, setScanHistory] = useState([]);
+
+  const [backendStatus, setBackendStatus] = useState({
+    isOnline: false,
+    osvConnected: false,
+    message: 'Connecting...',
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [vulnSearchPreset, setVulnSearchPreset] = useState('');
 
@@ -33,87 +42,140 @@ export default function App() {
     setBackendStatus(status);
   };
 
-  // Initial backend health check on mount
+  // Restore the server-side session before requesting any private scan data.
   useEffect(() => {
     let isMounted = true;
-    checkBackendHealth().then((status) => {
-      if (isMounted) setBackendStatus(status);
-    });
+
+    const restoreSession = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        if (!isMounted) return;
+        if (currentUser) {
+          const [status, scans] = await Promise.all([checkBackendHealth(), getScans()]);
+          if (!isMounted) return;
+          setUser(currentUser);
+          setBackendStatus({ ...status, isOnline: true });
+          setScanHistory(scans);
+        }
+      } catch (error) {
+        if (isMounted) setAuthError(error.message);
+      } finally {
+        if (isMounted) setAuthLoading(false);
+      }
+    };
+
+    restoreSession();
+
     return () => {
       isMounted = false;
     };
   }, []);
 
+  const handleAuthenticated = async (authenticatedUser) => {
+    const [status, scans] = await Promise.all([checkBackendHealth(), getScans()]);
+    setBackendStatus({ ...status, isOnline: true });
+    setScanHistory(scans);
+    setUser(authenticatedUser);
+    setAuthError('');
+  };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setUser(null);
+      setScanData(null);
+      setVulnerabilities([]);
+      setComponents([]);
+      setScanHistory([]);
+      setCurrentTab('overview');
+      setSelectedVulnerability(null);
+      setAuthError('');
+    } catch (error) {
+      setAuthError(error.message);
+    }
+  };
 
-  // Navigating to vulnerability deep dive
+  // Select vulnerability
   const handleSelectVulnerability = (vuln) => {
     setSelectedVulnerability(vuln);
     setCurrentTab('detail');
   };
 
-  // Returning from vulnerability detail to the table
+  // Back to vulnerabilities
   const handleBackToVulnerabilities = () => {
     setCurrentTab('vulnerabilities');
   };
 
-  // Filtering vulnerabilities by package name (e.g. from components page)
+  // Filter vulnerabilities by package
   const handleFilterByPackage = (packageName) => {
     setVulnSearchPreset(packageName);
     setCurrentTab('vulnerabilities');
   };
 
-  // Handle new scan completion
+  // Handle real scan completion from backend
   const handleScanComplete = (scanInfo) => {
-    setScanData((prev) => ({
-      ...prev,
-      sbomFile: scanInfo.fileName || prev.sbomFile,
-      sbomFormat: scanInfo.format || prev.sbomFormat,
-      scanDate: "Just now",
-      scanId: `scan-${Date.now().toString().slice(-4)}`,
-    }));
+    if (!scanInfo) return;
+
+    const normalizedScan = normalizeScanData(scanInfo);
+    setScanData(normalizedScan);
+    setVulnerabilities(normalizedScan.vulnerabilities);
+    setComponents(normalizedScan.components);
+    getScans()
+      .then(setScanHistory)
+      .catch((error) => console.error('Failed to refresh scan history.', error));
+
     setCurrentTab('overview');
   };
 
-  // Load a historical scan
-  const handleSelectHistoricalScan = (scan) => {
-    setScanData((prev) => ({
-      ...prev,
-      scanId: scan.id,
-      scanName: scan.name,
-      sbomFile: scan.sbomFile,
-      sbomFormat: scan.format,
-      scanDate: scan.date,
-      totalComponents: scan.components,
-      vulnerabilitiesCount: scan.vulnerabilities,
-      overallRisk: {
-        ...prev.overallRisk,
-        score: scan.riskScore,
-        level: scan.risk,
-      },
-      sbomTrust: {
-        ...prev.sbomTrust,
-        score: scan.trust,
-      }
-    }));
-    setCurrentTab('overview');
+  // Load a historical scan returned by the backend
+  const handleSelectHistoricalScan = async (scan) => {
+    if (!scan) return;
+
+    try {
+      const normalizedScan = normalizeScanData(await getScan(scan.id));
+      setScanData(normalizedScan);
+      setVulnerabilities(normalizedScan.vulnerabilities);
+      setComponents(normalizedScan.components);
+      setCurrentTab('overview');
+    } catch (error) {
+      console.error('Failed to load the selected SBOM scan.', error);
+    }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#090d16] flex items-center justify-center text-sm text-slate-400">
+        Checking your secure session…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen onAuthenticated={handleAuthenticated} initialError={authError} />;
+  }
 
   return (
     <div className="flex w-full min-h-screen bg-[#090d16] text-slate-100 font-sans selection:bg-blue-600 selection:text-white">
+
       {/* Persistent Desktop Sidebar */}
       <Sidebar
         currentTab={currentTab}
         setTab={(tab) => {
-          if (tab !== 'detail') setSelectedVulnerability(null);
+          if (tab !== 'detail') {
+            setSelectedVulnerability(null);
+          }
+
           setCurrentTab(tab);
         }}
         scanData={scanData}
         backendStatus={backendStatus}
+        user={user}
+        onLogout={handleLogout}
       />
 
       {/* Main Desktop Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+
         {/* Top Desktop Header */}
         <Header
           currentTab={currentTab}
@@ -121,7 +183,12 @@ export default function App() {
           searchQuery={searchQuery}
           setSearchQuery={(q) => {
             setSearchQuery(q);
-            if (q.trim().length > 1 && currentTab !== 'vulnerabilities' && currentTab !== 'components') {
+
+            if (
+              q.trim().length > 1 &&
+              currentTab !== 'vulnerabilities' &&
+              currentTab !== 'components'
+            ) {
               setVulnSearchPreset(q);
               setCurrentTab('vulnerabilities');
             }
@@ -131,6 +198,12 @@ export default function App() {
 
         {/* Scrollable View Container */}
         <main className="flex-1 overflow-y-auto px-8 py-6 w-full max-w-[1920px] mx-auto">
+          {authError && (
+            <p role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {authError}
+            </p>
+          )}
+
           {currentTab === 'overview' && (
             <OverviewScreen
               scanData={scanData}
@@ -150,14 +223,16 @@ export default function App() {
           {currentTab === 'scans' && (
             <ScansScreen
               onNewScan={() => setCurrentTab('upload')}
+              scans={scanHistory}
               onSelectScan={handleSelectHistoricalScan}
-              currentScanId={scanData.scanId}
+              currentScanId={scanData?.id}
             />
           )}
 
           {currentTab === 'vulnerabilities' && (
             <VulnerabilitiesScreen
               vulnerabilities={vulnerabilities}
+              scanData={scanData}
               onSelectVulnerability={handleSelectVulnerability}
               initialSearchQuery={vulnSearchPreset || searchQuery}
             />
@@ -173,8 +248,12 @@ export default function App() {
           {currentTab === 'components' && (
             <ComponentsScreen
               components={components}
-              onSelectComponent={(c) => handleFilterByPackage(c.name)}
-              onFilterVulnerabilitiesByPackage={handleFilterByPackage}
+              onSelectComponent={(component) =>
+                handleFilterByPackage(component.name)
+              }
+              onFilterVulnerabilitiesByPackage={
+                handleFilterByPackage
+              }
             />
           )}
 
@@ -202,6 +281,7 @@ export default function App() {
               onRefreshBackendStatus={refreshBackendStatus}
             />
           )}
+
         </main>
       </div>
     </div>

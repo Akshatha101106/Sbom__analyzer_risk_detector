@@ -38,8 +38,10 @@ export function SettingsScreen({ backendStatus, onRefreshBackendStatus }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-emerald-400 font-mono-tech font-bold">Connected</span>
+              <span className={`w-2 h-2 rounded-full ${backendStatus?.osvConnected ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+              <span className={`text-xs font-mono-tech font-bold ${backendStatus?.osvConnected ? 'text-emerald-400' : 'text-slate-500'}`}>
+                {backendStatus?.osvConnected ? 'Connected' : 'Unavailable'}
+              </span>
             </div>
           </div>
 
@@ -48,12 +50,12 @@ export function SettingsScreen({ backendStatus, onRefreshBackendStatus }) {
             <div>
               <div className="text-xs font-bold text-slate-200">Local Auditor Backend API</div>
               <div className="text-[11px] text-slate-400 font-mono-tech mt-0.5">
-                Target: http://localhost:5000/api/health
+                Target: {backendStatus?.url || 'Backend URL unavailable'}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <span className={`text-xs font-mono-tech font-bold ${backendStatus?.isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {backendStatus?.isOnline ? 'Port 5000 Active' : 'Offline (Using Demo Data)'}
+                {backendStatus?.isOnline ? 'Online' : 'Offline'}
               </span>
               <button
                 onClick={handleTestConnection}
@@ -66,6 +68,22 @@ export function SettingsScreen({ backendStatus, onRefreshBackendStatus }) {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="bg-[#101726] border border-[#1b253b] rounded-xl p-6 space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-100 font-mono-tech">
+              Groq AI
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1">
+              AI explanations and chat grounded in the selected scan.
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-300 leading-relaxed">
+          Set <code className="text-blue-300">GROQ_API_KEY</code> in <code className="text-blue-300">backend/sbomback/.env</code> and restart the backend. The key stays on the backend and is never sent to the browser. When you request an AI response, scan metrics, up to 15 highest-priority findings, and your chat messages are sent to Groq.
+        </p>
       </div>
 
       {/* Display & Presentation Settings */}

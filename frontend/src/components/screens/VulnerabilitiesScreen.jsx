@@ -2,8 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { SeverityBadge, RiskScoreBadge, ContextBadge } from '../common/Badge';
 import { SearchIcon, FilterIcon, XIcon } from '../common/Icons';
 
+const EMPTY_VULNERABILITIES = [];
 
-export function VulnerabilitiesScreen({ vulnerabilities, onSelectVulnerability, initialSearchQuery = "" }) {
+export function VulnerabilitiesScreen({ vulnerabilities = [], scanData, onSelectVulnerability, initialSearchQuery = "" }) {
+  const safeVulnerabilities = Array.isArray(vulnerabilities) ? vulnerabilities : EMPTY_VULNERABILITIES;
   const [search, setSearch] = useState(initialSearchQuery);
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [depTypeFilter, setDepTypeFilter] = useState('ALL');
@@ -13,7 +15,7 @@ export function VulnerabilitiesScreen({ vulnerabilities, onSelectVulnerability, 
 
   // Filter logic
   const filtered = useMemo(() => {
-    return vulnerabilities.filter((vuln) => {
+    return safeVulnerabilities.filter((vuln) => {
       // Search text match
       const query = search.toLowerCase().trim();
       if (query) {
@@ -45,7 +47,7 @@ export function VulnerabilitiesScreen({ vulnerabilities, onSelectVulnerability, 
       if (sortBy === 'package') return a.package.localeCompare(b.package);
       return 0;
     });
-  }, [vulnerabilities, search, severityFilter, depTypeFilter, envFilter, fixFilter, sortBy]);
+  }, [safeVulnerabilities, search, severityFilter, depTypeFilter, envFilter, fixFilter, sortBy]);
 
   const hasActiveFilters = search || severityFilter !== 'ALL' || depTypeFilter !== 'ALL' || envFilter !== 'ALL' || fixFilter !== 'ALL';
 
@@ -60,12 +62,20 @@ export function VulnerabilitiesScreen({ vulnerabilities, onSelectVulnerability, 
 
   // Severity metrics for top counts
   const counts = {
-    critical: vulnerabilities.filter(v => v.severity === 'CRITICAL').length,
-    high: vulnerabilities.filter(v => v.severity === 'HIGH').length,
-    medium: vulnerabilities.filter(v => v.severity === 'MEDIUM').length,
-    low: vulnerabilities.filter(v => v.severity === 'LOW').length,
-    unknown: vulnerabilities.filter(v => v.severity === 'UNKNOWN').length,
+    critical: safeVulnerabilities.filter(v => v.severity === 'CRITICAL').length,
+    high: safeVulnerabilities.filter(v => v.severity === 'HIGH').length,
+    medium: safeVulnerabilities.filter(v => v.severity === 'MEDIUM').length,
+    low: safeVulnerabilities.filter(v => v.severity === 'LOW').length,
+    unknown: safeVulnerabilities.filter(v => v.severity === 'UNKNOWN').length,
   };
+
+  if (!scanData) {
+    return (
+      <div className="p-12 text-center text-slate-400">
+        Analyze an SBOM to view its vulnerability findings.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12">
@@ -88,7 +98,7 @@ export function VulnerabilitiesScreen({ vulnerabilities, onSelectVulnerability, 
                 : 'bg-[#101726] border border-[#1e2a42] text-slate-400 hover:text-slate-200'
             }`}
           >
-            All ({vulnerabilities.length})
+            All ({safeVulnerabilities.length})
           </button>
           <button
             onClick={() => setSeverityFilter('CRITICAL')}
@@ -218,10 +228,10 @@ export function VulnerabilitiesScreen({ vulnerabilities, onSelectVulnerability, 
         </div>
 
         <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono-tech pt-1">
-          <span>Showing {filtered.length} of {vulnerabilities.length} vulnerabilities</span>
+          <span>Showing {filtered.length} of {safeVulnerabilities.length} vulnerabilities</span>
           {counts.unknown > 0 && (
             <span className="text-purple-400">
-              ⚠ UNKNOWN DOES NOT MEAN SAFE: 1 vulnerability has unverified dependency context
+              ⚠ UNKNOWN DOES NOT MEAN SAFE: {counts.unknown} finding{counts.unknown === 1 ? '' : 's'} have unknown severity.
             </span>
           )}
         </div>

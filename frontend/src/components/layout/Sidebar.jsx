@@ -3,20 +3,20 @@ import {
   ShieldIcon, 
   BugIcon, 
   PackageIcon, 
-  AwardIcon, 
-  FileTextIcon, 
+  AwardIcon,
+  FileTextIcon,
   SettingsIcon, 
   HistoryIcon, 
   UploadCloudIcon 
 } from '../common/Icons';
 
-export function Sidebar({ currentTab, setTab, scanData, backendStatus }) {
+export function Sidebar({ currentTab, setTab, scanData, backendStatus, user, onLogout }) {
   const navItems = [
     { id: 'overview', label: 'Overview', icon: ShieldIcon, badge: null },
     { id: 'scans', label: 'Scans', icon: HistoryIcon, badge: null },
-    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: BugIcon, badge: scanData?.vulnerabilitiesCount || 14, badgeColor: 'bg-red-500/20 text-red-400 border border-red-500/30' },
-    { id: 'components', label: 'Components', icon: PackageIcon, badge: scanData?.totalComponents || 127, badgeColor: 'bg-slate-800 text-slate-300' },
-    { id: 'quality', label: 'SBOM Quality', icon: AwardIcon, badge: `${scanData?.sbomTrust?.score || 78}%`, badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
+    { id: 'vulnerabilities', label: 'Vulnerabilities', icon: BugIcon, badge: scanData ? scanData.vulnerabilitiesCount : null, badgeColor: 'bg-red-500/20 text-red-400 border border-red-500/30' },
+    { id: 'components', label: 'Components', icon: PackageIcon, badge: scanData ? scanData.totalComponents : null, badgeColor: 'bg-slate-800 text-slate-300' },
+    { id: 'quality', label: 'SBOM Quality', icon: AwardIcon, badge: scanData ? `${scanData.sbomTrust.score}%` : null, badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' },
     { id: 'reports', label: 'Reports', icon: FileTextIcon, badge: null },
   ];
 
@@ -78,7 +78,7 @@ export function Sidebar({ currentTab, setTab, scanData, backendStatus }) {
                   <Icon className={`w-4 h-4 ${isActive ? 'text-blue-400' : 'text-slate-400'}`} />
                   <span>{item.label}</span>
                 </div>
-                {item.badge && (
+                {item.badge !== null && (
                   <span className={`text-[10px] px-2 py-0.5 rounded font-mono-tech ${item.badgeColor}`}>
                     {item.badge}
                   </span>
@@ -109,6 +109,16 @@ export function Sidebar({ currentTab, setTab, scanData, backendStatus }) {
 
       {/* Bottom Area: System Status */}
       <div className="p-4 border-t border-[#1a2337] bg-[#090e18] space-y-3">
+        <div className="flex items-center justify-between gap-2 rounded bg-[#101726] border border-[#1b263b] p-2">
+          <span className="min-w-0 truncate text-[11px] text-slate-300" title={user?.email}>{user?.email}</span>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400 hover:text-red-300"
+          >
+            Sign out
+          </button>
+        </div>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           System Status
         </div>
@@ -116,10 +126,12 @@ export function Sidebar({ currentTab, setTab, scanData, backendStatus }) {
         {/* OSV Intelligence Status */}
         <div className="flex items-center justify-between text-xs p-2 rounded bg-[#101726] border border-[#1b263b]">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className={`w-2 h-2 rounded-full ${backendStatus?.osvConnected ? 'bg-emerald-400' : 'bg-slate-500'}`} />
             <span className="text-slate-300 font-mono-tech text-[11px]">OSV Intelligence</span>
           </div>
-          <span className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider">Connected</span>
+          <span className={`text-[10px] font-semibold uppercase tracking-wider ${backendStatus?.osvConnected ? 'text-emerald-400' : 'text-slate-500'}`}>
+            {backendStatus?.osvConnected ? 'Connected' : 'Unavailable'}
+          </span>
         </div>
 
         {/* Backend API Health Status */}
@@ -129,7 +141,7 @@ export function Sidebar({ currentTab, setTab, scanData, backendStatus }) {
             <span className="text-slate-300 font-mono-tech text-[11px]">Backend API</span>
           </div>
           <span className={`text-[10px] font-semibold uppercase tracking-wider ${backendStatus?.isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {backendStatus?.isOnline ? 'Port 5000' : 'Demo Mode'}
+            {backendStatus?.isOnline ? 'Online' : 'Offline'}
           </span>
         </div>
 

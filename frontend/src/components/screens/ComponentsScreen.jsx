@@ -2,7 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { ContextBadge, RiskScoreBadge } from '../common/Badge';
 import { SearchIcon, XIcon } from '../common/Icons';
 
+const EMPTY_COMPONENTS = [];
+
 export function ComponentsScreen({ components, onSelectComponent, onFilterVulnerabilitiesByPackage }) {
+  const safeComponents = Array.isArray(components) ? components : EMPTY_COMPONENTS;
   const [search, setSearch] = useState('');
   const [depFilter, setDepFilter] = useState('ALL');
   const [envFilter, setEnvFilter] = useState('ALL');
@@ -10,7 +13,7 @@ export function ComponentsScreen({ components, onSelectComponent, onFilterVulner
 
 
   const filtered = useMemo(() => {
-    return components.filter((comp) => {
+    return safeComponents.filter((comp) => {
       const q = search.toLowerCase().trim();
       if (q) {
         const matchName = comp.name.toLowerCase().includes(q);
@@ -20,20 +23,28 @@ export function ComponentsScreen({ components, onSelectComponent, onFilterVulner
         if (!matchName && !matchPurl && !matchSupplier && !matchLicense) return false;
       }
 
-      if (depFilter !== 'ALL' && comp.dependencyType !== depFilter) return false;
-      if (envFilter !== 'ALL' && comp.environment !== envFilter) return false;
+      if (depFilter !== 'ALL' && String(comp.dependencyType || '').toUpperCase() !== depFilter.toUpperCase()) return false;
+      if (envFilter !== 'ALL' && String(comp.environment || '').toUpperCase() !== envFilter.toUpperCase()) return false;
       if (vulnFilter === 'VULNERABLE' && comp.vulnerabilitiesCount === 0) return false;
       if (vulnFilter === 'CLEAN' && comp.vulnerabilitiesCount > 0) return false;
 
       return true;
     });
-  }, [components, search, depFilter, envFilter, vulnFilter]);
+  }, [safeComponents, search, depFilter, envFilter, vulnFilter]);
 
-  const directCount = components.filter(c => c.dependencyType === 'Direct').length;
-  const transitiveCount = components.filter(c => c.dependencyType === 'Transitive').length;
-  const prodCount = components.filter(c => c.environment === 'Production').length;
-  const devCount = components.filter(c => c.environment === 'Development').length;
-  const vulnTotal = components.filter(c => c.vulnerabilitiesCount > 0).length;
+  const directCount = safeComponents.filter(c => String(c.dependencyType || '').toUpperCase() === 'DIRECT').length;
+  const transitiveCount = safeComponents.filter(c => String(c.dependencyType || '').toUpperCase() === 'TRANSITIVE').length;
+  const prodCount = safeComponents.filter(c => String(c.environment || '').toUpperCase() === 'PRODUCTION').length;
+  const devCount = safeComponents.filter(c => String(c.environment || '').toUpperCase() === 'DEVELOPMENT').length;
+  const vulnTotal = safeComponents.filter(c => c.vulnerabilitiesCount > 0).length;
+
+  if (safeComponents.length === 0) {
+    return (
+      <div className="p-12 text-center text-slate-400">
+        No analyzed components are available.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12">
@@ -49,27 +60,27 @@ export function ComponentsScreen({ components, onSelectComponent, onFilterVulner
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="bg-[#101726] border border-[#1b253b] rounded-xl p-4">
           <div className="text-[11px] font-mono-tech uppercase text-slate-400">Total Components</div>
-          <div className="text-2xl font-bold font-mono-tech text-slate-100 mt-1">127</div>
+          <div className="text-2xl font-bold font-mono-tech text-slate-100 mt-1">{safeComponents.length}</div>
         </div>
         <div className="bg-[#101726] border border-[#1b253b] rounded-xl p-4">
           <div className="text-[11px] font-mono-tech uppercase text-slate-400">Direct Dependencies</div>
-          <div className="text-2xl font-bold font-mono-tech text-blue-400 mt-1">{directCount || 34}</div>
+          <div className="text-2xl font-bold font-mono-tech text-blue-400 mt-1">{directCount}</div>
         </div>
         <div className="bg-[#101726] border border-[#1b253b] rounded-xl p-4">
           <div className="text-[11px] font-mono-tech uppercase text-slate-400">Transitive Dependencies</div>
-          <div className="text-2xl font-bold font-mono-tech text-purple-400 mt-1">{transitiveCount || 93}</div>
+          <div className="text-2xl font-bold font-mono-tech text-purple-400 mt-1">{transitiveCount}</div>
         </div>
         <div className="bg-[#101726] border border-[#1b253b] rounded-xl p-4">
           <div className="text-[11px] font-mono-tech uppercase text-slate-400">Production Scope</div>
-          <div className="text-2xl font-bold font-mono-tech text-emerald-400 mt-1">{prodCount || 108}</div>
+          <div className="text-2xl font-bold font-mono-tech text-emerald-400 mt-1">{prodCount}</div>
         </div>
         <div className="bg-[#101726] border border-[#1b253b] rounded-xl p-4">
           <div className="text-[11px] font-mono-tech uppercase text-slate-400">Development Scope</div>
-          <div className="text-2xl font-bold font-mono-tech text-slate-300 mt-1">{devCount || 19}</div>
+          <div className="text-2xl font-bold font-mono-tech text-slate-300 mt-1">{devCount}</div>
         </div>
         <div className="bg-[#101726] border border-red-500/20 rounded-xl p-4">
           <div className="text-[11px] font-mono-tech uppercase text-red-400">Vulnerable Packages</div>
-          <div className="text-2xl font-bold font-mono-tech text-red-400 mt-1">{vulnTotal || 11}</div>
+          <div className="text-2xl font-bold font-mono-tech text-red-400 mt-1">{vulnTotal}</div>
         </div>
       </div>
 
@@ -93,9 +104,9 @@ export function ComponentsScreen({ components, onSelectComponent, onFilterVulner
             className="bg-[#0d1320] border border-[#1f2a3f] text-slate-300 rounded-lg px-3 py-2 text-xs font-mono-tech"
           >
             <option value="ALL">All Dependencies</option>
-            <option value="Direct">Direct Only</option>
-            <option value="Transitive">Transitive Only</option>
-            <option value="Unknown">Unknown Type</option>
+            <option value="DIRECT">Direct Only</option>
+            <option value="TRANSITIVE">Transitive Only</option>
+            <option value="UNKNOWN">Unknown Type</option>
           </select>
 
           <select
@@ -104,8 +115,8 @@ export function ComponentsScreen({ components, onSelectComponent, onFilterVulner
             className="bg-[#0d1320] border border-[#1f2a3f] text-slate-300 rounded-lg px-3 py-2 text-xs font-mono-tech"
           >
             <option value="ALL">All Environments</option>
-            <option value="Production">Production</option>
-            <option value="Development">Development</option>
+            <option value="PRODUCTION">Production</option>
+            <option value="DEVELOPMENT">Development</option>
           </select>
 
           <select
@@ -137,6 +148,13 @@ export function ComponentsScreen({ components, onSelectComponent, onFilterVulner
 
       {/* Components Table */}
       <div className="bg-[#101726] border border-[#1b253b] rounded-xl overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="p-12 text-center text-sm text-slate-400">
+            {safeComponents.length === 0
+              ? 'No analyzed components are available.'
+              : 'No components match the selected filters.'}
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#0b0f1a] text-slate-400 uppercase font-mono-tech text-[11px] border-b border-[#182338]">
@@ -210,6 +228,7 @@ export function ComponentsScreen({ components, onSelectComponent, onFilterVulner
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );
